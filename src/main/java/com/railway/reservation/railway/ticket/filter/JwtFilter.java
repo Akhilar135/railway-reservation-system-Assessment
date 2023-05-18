@@ -1,5 +1,6 @@
 package com.railway.reservation.railway.ticket.filter;
 
+import com.railway.reservation.railway.ticket.services.CustomUserDetailsService;
 import com.railway.reservation.railway.ticket.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -20,6 +21,46 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Autowired
     JwtUtil jwtUtill;
+
+    @Autowired
+    CustomUserDetailsService customUserDetailsService;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+
+        String authHeader = request.getHeader("Authorization");
+        String token = null;
+        String userName = null;
+        // Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJua2RlYnVnIiwiZXhwIjoxNjU5MzY2Mzc4LCJpYXQiOjE2NTkzMzAzNzh9.b55YX9u4uAtg5HqtaNNJBQoQirrxjmm4_sn1pW1_QH8
+        if(authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+            userName = jwtUtill.extractUsername(token);
+        }
+
+        validatingUserToken(userName, token, request);
+
+        filterChain.doFilter(request,response);
+
+    }
+
+    private void validatingUserToken(String userName, String token, HttpServletRequest request) {
+
+        if(userName != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            UserDetails userDetails = customUserDetailsService.loadUserByUsername(userName);
+
+            if(jwtUtill.validateToken(token, userDetails)) {
+                UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken =
+                        new UsernamePasswordAuthenticationToken(userDetails,
+                                null,userDetails.getAuthorities());
+                usernamePasswordAuthenticationToken
+                        .setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder
+                        .getContext()
+                        .setAuthentication(usernamePasswordAuthenticationToken);
+            }
+
+        }
+    }
 
 
 }
